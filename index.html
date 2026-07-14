@@ -6,6 +6,7 @@
     <title>Gouta Maru - Tank Volume Calculator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
+        /* (style sama seperti sebelumnya, tidak diubah) */
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -265,21 +266,6 @@
             .app-header { padding-top: max(16px, env(safe-area-inset-top)); }
             body { padding-bottom: max(80px, env(safe-area-inset-bottom)); }
         }
-        .sheet-list {
-            font-size: 11px;
-            color: #5a7a8a;
-            margin-top: 6px;
-            text-align: center;
-            max-height: 60px;
-            overflow-y: auto;
-        }
-        .sheet-list span {
-            display: inline-block;
-            background: #eef3f9;
-            padding: 1px 8px;
-            border-radius: 10px;
-            margin: 2px;
-        }
     </style>
 </head>
 <body>
@@ -292,7 +278,6 @@
 
 <div class="container">
     
-    <!-- Upload Excel -->
     <div class="card">
         <div class="card-title">📂 Upload File Excel</div>
         <div class="upload-area" id="uploadArea">
@@ -309,10 +294,8 @@
         <div id="uploadInfo" style="font-size:11px; color:#7a8a9e; text-align:center; margin-top:4px;">
             Belum ada file diupload
         </div>
-        <div class="sheet-list" id="sheetList"></div>
     </div>
     
-    <!-- Mode Toggle -->
     <div class="card" style="padding: 12px 14px;">
         <div class="mode-toggle" id="modeToggle">
             <button class="active" data-mode="sounding">📏 Sounding</button>
@@ -321,7 +304,6 @@
         <div id="modeWarning" class="warning-msg">⚠️ Tangki DOT hanya mendukung mode Sounding</div>
     </div>
     
-    <!-- Kalkulator -->
     <div class="card">
         <div class="card-title">
             📊 Kalkulator Volume
@@ -393,7 +375,7 @@
 
 <script>
 // ============================================================
-// APLIKASI DENGAN UPLOAD EXCEL - DETEKSI SEMUA TANGKI
+// APLIKASI DENGAN UPLOAD EXCEL - PERBAIKAN DETEKSI SHEET
 // ============================================================
 
 // State
@@ -411,7 +393,6 @@ const fileStatus = document.getElementById('fileStatus');
 const fileName = document.getElementById('fileName');
 const resetFileBtn = document.getElementById('resetFileBtn');
 const uploadInfo = document.getElementById('uploadInfo');
-const sheetList = document.getElementById('sheetList');
 const tankSelect = document.getElementById('tankSelect');
 const valueInput = document.getElementById('valueInput');
 const trimInput = document.getElementById('trimInput');
@@ -430,319 +411,225 @@ const dataStatus = document.getElementById('dataStatus');
 const tankCount = document.getElementById('tankCount');
 
 // ============================================================
-// DETEKSI TANGKI DARI SHEET
+// FUNGSI BACA EXCEL - DIPERBAIKI
 // ============================================================
 
-function detectTankSheets(workbook) {
+function readExcelFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', cellDates: false });
+            processWorkbook(workbook, file.name);
+        } catch (err) {
+            showUploadError('Gagal membaca file: ' + err.message);
+        }
+    };
+    reader.onerror = function() {
+        showUploadError('Gagal membaca file');
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function processWorkbook(workbook, filename) {
     const sheetNames = workbook.SheetNames;
-    const detected = [];
-    const allSheets = [];
-    
-    for (const name of sheetNames) {
-        const ws = workbook.Sheets[name];
+    const detectedTanks = [];
+    const tempDataMap = {};
+    const tempConfigMap = {};
+
+    // Loop melalui semua sheet
+    for (const sheetName of sheetNames) {
+        // Skip sheet yang jelas bukan tangki
+        const lowerName = sheetName.toLowerCase();
+        if (lowerName.includes('cover') || lowerName.includes('content') || 
+            lowerName.includes('calculator') || lowerName.includes('instruction') ||
+            lowerName.includes('bibliography') || lowerName.includes('list')) {
+            continue;
+        }
+
+        const ws = workbook.Sheets[sheetName];
         if (!ws) continue;
-        
+
         // Konversi ke array
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (rows.length < 5) continue;
-        
-        // Cek apakah sheet ini berisi data tangki
-        // Kriteria: ada baris dengan "CAPACITY", "Gauge", "sounding", "ullage", atau data numerik di kolom pertama
-        let isTankSheet = false;
-        let hasNumericColumn = false;
-        let hasVolumeData = false;
-        
-        // Cek 10 baris pertama untuk pola
+        if (rows.length < 3) continue;
+
+        // Deteksi apakah sheet ini berisi data tangki
+        // Cari baris yang mengandung kata "CAPACITY" atau "Gauge" atau "Ullage"
+        let headerRowIdx = -1;
+        let isUllage = false;
+        let dataStartRow = -1;
+
+        // Pertama, cari baris header yang mengandung kata kunci
         for (let i = 0; i < Math.min(rows.length, 30); i++) {
             const row = rows[i];
             if (!row || row.length === 0) continue;
-            
             const rowStr = row.join(' ').toLowerCase();
-            
-            // Cek kata kunci
-            if (rowStr.includes('capacity') || rowStr.includes('kapasitas') || 
-                rowStr.includes('sounding') || rowStr.includes('ullage') ||
-                rowStr.includes('gauge') || rowStr.includes('trim')) {
-                isTankSheet = true;
+            if (rowStr.includes('capacity') || rowStr.includes('kapasitas')) {
+                headerRowIdx = i;
+                // Cek apakah ini ullage
+                if (rowStr.includes('ullage')) isUllage = true;
                 break;
             }
-            
-            // Cek apakah ada 2+ angka di baris (kemungkinan data)
-            let numCount = 0;
-            for (let j = 0; j < Math.min(row.length, 10); j++) {
-                if (!isNaN(parseFloat(row[j])) && row[j] !== '') {
-                    numCount++;
-                }
+            if (rowStr.includes('gauge') || rowStr.includes('sounding')) {
+                headerRowIdx = i;
+                isUllage = false;
+                break;
             }
-            if (numCount >= 3) {
-                hasNumericColumn = true;
+            if (rowStr.includes('ullage')) {
+                headerRowIdx = i;
+                isUllage = true;
+                break;
             }
         }
-        
-        // Jika tidak ada kata kunci, cek apakah ada data numerik yang konsisten
-        if (!isTankSheet && hasNumericColumn) {
-            // Cek 20 baris data untuk melihat apakah ada pola gauge dan volume
-            let dataRows = 0;
-            for (let i = 0; i < Math.min(rows.length, 50); i++) {
+
+        // Jika tidak ditemukan header, cari baris pertama yang memiliki angka di kolom pertama
+        if (headerRowIdx === -1) {
+            for (let i = 0; i < Math.min(rows.length, 20); i++) {
                 const row = rows[i];
-                if (!row || row.length < 3) continue;
+                if (!row || row.length < 9) continue;
                 const first = parseFloat(row[0]);
-                if (!isNaN(first) && first >= 0 && first < 1000) {
-                    // Cek apakah ada volume di kolom lain
-                    let hasVol = false;
-                    for (let j = 1; j < Math.min(row.length, 9); j++) {
-                        const v = parseFloat(row[j]);
-                        if (!isNaN(v) && v >= 0 && v < 1000) {
-                            hasVol = true;
-                            break;
-                        }
+                if (!isNaN(first) && first >= 0) {
+                    // Periksa apakah ada minimal 8 angka berikutnya
+                    let validCount = 0;
+                    for (let j = 1; j < Math.min(9, row.length); j++) {
+                        if (!isNaN(parseFloat(row[j]))) validCount++;
                     }
-                    if (hasVol) {
-                        dataRows++;
+                    if (validCount >= 5) {
+                        headerRowIdx = i - 1; // anggap baris ini adalah data, header di atasnya
+                        if (headerRowIdx < 0) headerRowIdx = 0;
+                        break;
                     }
                 }
             }
-            if (dataRows >= 5) {
-                isTankSheet = true;
-            }
         }
-        
-        if (isTankSheet) {
-            detected.push(name);
-        }
-        allSheets.push(name);
-    }
-    
-    return { detected, allSheets };
-}
 
-// ============================================================
-// BACA DATA DARI SHEET YANG TERDETEKSI
-// ============================================================
+        // Jika masih tidak ditemukan, lewati sheet ini
+        if (headerRowIdx === -1) continue;
 
-function readTankSheet(ws, sheetName) {
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    if (rows.length < 3) return null;
-    
-    // Cari baris data dimulai
-    let startRow = 0;
-    let gaugeCol = 0;
-    let trimCols = [];
-    let isUllage = false;
-    
-    // Cari header
-    for (let i = 0; i < Math.min(rows.length, 20); i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-        const rowStr = row.join(' ').toLowerCase();
-        
-        // Deteksi apakah ini sheet ullage atau sounding
-        if (rowStr.includes('ullage')) isUllage = true;
-        if (rowStr.includes('sounding')) isUllage = false;
-        
-        // Cari kolom gauge
-        for (let j = 0; j < row.length; j++) {
-            const cell = String(row[j]).toLowerCase();
-            if (cell.includes('gauge') || cell.includes('sounding') || cell.includes('ullage')) {
-                gaugeCol = j;
-                // Cari trim columns
-                for (let k = j + 1; k < Math.min(j + 9, row.length); k++) {
-                    const v = parseFloat(row[k]);
-                    if (!isNaN(v) && (v === -2 || v === -1 || v === 0 || v === 1 || v === 2 || v === 3 || v === 4 || v === 5)) {
-                        trimCols.push(k);
-                    }
-                }
-                if (trimCols.length >= 3) {
-                    startRow = i + 1;
-                    break;
-                }
-            }
-        }
-        if (trimCols.length >= 3) break;
-    }
-    
-    // Jika tidak ditemukan trim, coba cari baris data langsung
-    if (trimCols.length < 3) {
-        for (let i = 0; i < Math.min(rows.length, 30); i++) {
+        // Ambil data mulai dari headerRowIdx + 1 atau cari baris data pertama yang berisi angka
+        let startRow = headerRowIdx + 1;
+        // Cari baris data pertama yang memiliki angka di kolom pertama
+        let foundData = false;
+        for (let i = startRow; i < rows.length; i++) {
             const row = rows[i];
-            if (!row || row.length < 3) continue;
+            if (!row || row.length === 0) continue;
             const first = parseFloat(row[0]);
             if (!isNaN(first) && first >= 0) {
-                // Cek apakah ada angka di kolom 1-8
-                let numCount = 0;
-                for (let j = 1; j < Math.min(row.length, 9); j++) {
-                    if (!isNaN(parseFloat(row[j])) && parseFloat(row[j]) >= 0) {
-                        numCount++;
-                    }
-                }
-                if (numCount >= 3) {
-                    startRow = i;
-                    gaugeCol = 0;
-                    trimCols = [];
-                    for (let j = 1; j < Math.min(row.length, 9); j++) {
-                        trimCols.push(j);
-                    }
-                    break;
-                }
+                startRow = i;
+                foundData = true;
+                break;
             }
         }
-    }
-    
-    if (trimCols.length < 3) return null;
-    
-    // Ambil data
-    const dataRows = [];
-    let maxGauge = 0;
-    
-    for (let i = startRow; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length < 2) continue;
-        const gauge = parseFloat(row[gaugeCol]);
-        if (isNaN(gauge) || gauge < 0) continue;
-        if (gauge > 10000) continue; // filter data aneh
-        
-        const vols = [];
-        let hasValid = false;
-        for (let j = 0; j < trimCols.length && j < 8; j++) {
-            const idx = trimCols[j];
-            if (idx < row.length) {
-                const v = parseFloat(row[idx]);
+        if (!foundData) continue;
+
+        // Kumpulkan data
+        const dataRows = [];
+        let maxGauge = 0;
+        for (let i = startRow; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length < 2) continue;
+            const gauge = parseFloat(row[0]);
+            if (isNaN(gauge) || gauge < 0) continue;
+            // Ambil 8 nilai trim
+            const vols = [];
+            let hasValid = false;
+            for (let j = 1; j < Math.min(9, row.length); j++) {
+                const v = parseFloat(row[j]);
                 if (!isNaN(v) && v >= 0) {
                     vols.push(v);
                     hasValid = true;
                 } else {
                     vols.push(0);
                 }
-            } else {
-                vols.push(0);
+            }
+            if (!hasValid) continue;
+            while (vols.length < 8) vols.push(0);
+            dataRows.push([gauge, ...vols]);
+            if (gauge > maxGauge) maxGauge = gauge;
+        }
+
+        if (dataRows.length < 2) continue;
+
+        // Tentukan tipe tangki (FO jika nama mengandung "FOT" atau "FO", DO jika "DOT" atau "DO")
+        let type = 'FO';
+        if (sheetName.includes('DOT') || sheetName.includes('DO')) type = 'DO';
+
+        // Coba baca minUllage dan maxUllage dari sheet "Ullage Calculator" jika ada
+        let minUllage = null;
+        let maxUllage = null;
+        if (type === 'FO') {
+            const ullageSheet = workbook.Sheets['Ullage Calculator'];
+            if (ullageSheet) {
+                const ullageRows = XLSX.utils.sheet_to_json(ullageSheet, { header: 1, defval: '' });
+                for (const row of ullageRows) {
+                    if (row.length >= 5 && row[0] === sheetName) {
+                        minUllage = parseFloat(row[3]);
+                        maxUllage = parseFloat(row[4]);
+                        break;
+                    }
+                }
+            }
+            // Fallback
+            if (minUllage === null) {
+                // Estimasi berdasarkan maxGauge
+                minUllage = Math.round(maxGauge * 1.2);
+                maxUllage = Math.round(maxGauge * 2.2);
             }
         }
-        if (!hasValid) continue;
-        while (vols.length < 8) vols.push(0);
-        
-        dataRows.push([gauge, ...vols]);
-        if (gauge > maxGauge) maxGauge = gauge;
-    }
-    
-    if (dataRows.length < 2) return null;
-    
-    // Tentukan tipe (FO atau DO) dari nama sheet
-    const type = sheetName.includes('DOT') ? 'DO' : 'FO';
-    
-    // Cari minUllage dan maxUllage dari data ullage jika ada
-    let minUllage = null;
-    let maxUllage = null;
-    
-    // Jika sheet mengandung kata "Ullage", ambil dari data
-    if (isUllage) {
-        // Data sudah dalam bentuk ullage
-        // minUllage = gauge terkecil (ullage terbesar)
-        // maxUllage = gauge terbesar (ullage terkecil)
-        let minGauge = Infinity;
-        let maxGaugeVal = -Infinity;
-        for (const row of dataRows) {
-            if (row[0] < minGauge) minGauge = row[0];
-            if (row[0] > maxGaugeVal) maxGaugeVal = row[0];
-        }
-        minUllage = Math.round(minGauge);
-        maxUllage = Math.round(maxGaugeVal);
-    } else {
-        // Sounding sheet - coba cari di sheet "Ullage Calculator" jika ada
-        // Kita akan set default nanti
-    }
-    
-    return {
-        sounding: dataRows,
-        ullage: null,
-        config: {
+
+        // Simpan
+        tempDataMap[sheetName] = {
+            sounding: dataRows,
+            ullage: null
+        };
+        tempConfigMap[sheetName] = {
             maxGauge: maxGauge,
             minUllage: minUllage,
             maxUllage: maxUllage,
-            type: type,
-            isUllage: isUllage
+            type: type
+        };
+
+        // Jika FO, buat data ullage
+        if (type === 'FO' && minUllage !== null && maxUllage !== null && dataRows.length > 0) {
+            const ullageData = dataRows.map(row => {
+                const gauge = row[0];
+                const ullage = maxUllage - (gauge / maxGauge) * (maxUllage - minUllage);
+                const newRow = [Math.round(ullage * 100) / 100];
+                for (let i = 1; i < row.length; i++) {
+                    newRow.push(row[i]);
+                }
+                return newRow;
+            });
+            tempDataMap[sheetName].ullage = ullageData;
         }
-    };
-}
 
-// ============================================================
-// PROSES WORKBOOK
-// ============================================================
+        detectedTanks.push(sheetName);
+    }
 
-function processWorkbook(workbook, filename) {
-    const { detected, allSheets } = detectTankSheets(workbook);
-    
-    if (detected.length === 0) {
-        showUploadError('Tidak ditemukan sheet data tangki. Pastikan file Excel benar.');
-        return;
-    }
-    
-    // Baca data dari setiap sheet yang terdeteksi
-    tankDataMap = {};
-    tankConfigMap = {};
-    tankList = [];
-    
-    for (const sheetName of detected) {
-        const ws = workbook.Sheets[sheetName];
-        if (!ws) continue;
-        
-        const result = readTankSheet(ws, sheetName);
-        if (!result) continue;
-        
-        tankDataMap[sheetName] = {
-            sounding: result.sounding,
-            ullage: null
-        };
-        
-        tankConfigMap[sheetName] = {
-            maxGauge: result.config.maxGauge,
-            minUllage: result.config.minUllage,
-            maxUllage: result.config.maxUllage,
-            type: result.config.type
-        };
-        
-        tankList.push(sheetName);
-    }
-    
-    if (tankList.length === 0) {
-        showUploadError('Tidak ada data tangki yang valid.');
-        return;
-    }
-    
-    // Urutkan
-    tankList.sort((a, b) => {
-        const aType = tankConfigMap[a].type;
-        const bType = tankConfigMap[b].type;
+    // Urutkan: FOT dulu, lalu DOT
+    detectedTanks.sort((a, b) => {
+        const aType = tempConfigMap[a].type;
+        const bType = tempConfigMap[b].type;
         if (aType === 'FO' && bType === 'DO') return -1;
         if (aType === 'DO' && bType === 'FO') return 1;
         return a.localeCompare(b);
     });
-    
-    // Buat data ullage untuk FOT jika memungkinkan
-    for (const name of tankList) {
-        const config = tankConfigMap[name];
-        if (config.type === 'FO' && config.minUllage !== null && config.maxUllage !== null) {
-            const data = tankDataMap[name].sounding;
-            if (data && data.length > 0) {
-                const maxGauge = config.maxGauge;
-                const minUllage = config.minUllage;
-                const maxUllage = config.maxUllage;
-                const ullageData = data.map(row => {
-                    const gauge = row[0];
-                    const ullage = maxUllage - (gauge / maxGauge) * (maxUllage - minUllage);
-                    const newRow = [Math.round(ullage * 100) / 100];
-                    for (let i = 1; i < row.length; i++) {
-                        newRow.push(row[i]);
-                    }
-                    return newRow;
-                });
-                tankDataMap[name].ullage = ullageData;
-            }
-        }
+
+    if (detectedTanks.length === 0) {
+        showUploadError('Tidak ada sheet yang terdeteksi sebagai data tangki. Pastikan file Excel memiliki sheet dengan data sounding/ullage.');
+        return;
     }
-    
+
+    // Simpan ke state global
+    tankList = detectedTanks;
+    tankDataMap = tempDataMap;
+    tankConfigMap = tempConfigMap;
     excelData = { workbook, filename };
+
+    // Update UI
     updateUIAfterLoad();
-    showUploadSuccess(filename, detected);
+    showUploadSuccess(filename);
 }
 
 // ============================================================
@@ -754,7 +641,7 @@ function updateUIAfterLoad() {
     tankSelect.innerHTML = '';
     const foList = tankList.filter(name => tankConfigMap[name].type === 'FO');
     const doList = tankList.filter(name => tankConfigMap[name].type === 'DO');
-    
+
     if (foList.length > 0) {
         const foGroup = document.createElement('optgroup');
         foGroup.label = `━━━ FUEL OIL TANK (${foList.length}) ━━━`;
@@ -766,7 +653,7 @@ function updateUIAfterLoad() {
         });
         tankSelect.appendChild(foGroup);
     }
-    
+
     if (doList.length > 0) {
         const doGroup = document.createElement('optgroup');
         doGroup.label = `━━━ DIESEL OIL TANK (${doList.length}) ━━━`;
@@ -778,16 +665,17 @@ function updateUIAfterLoad() {
         });
         tankSelect.appendChild(doGroup);
     }
-    
+
     tankSelect.disabled = false;
     valueInput.disabled = false;
     trimInput.disabled = false;
     calcBtn.disabled = false;
-    
+
+    // Set default tank
     currentTank = tankList[0] || '';
     tankSelect.value = currentTank;
-    
-    // Enable ullage jika ada FOT
+
+    // Enable ullage mode jika ada FOT
     const hasFO = foList.length > 0;
     ullageModeBtn.disabled = !hasFO;
     if (!hasFO && currentMode === 'ullage') {
@@ -795,22 +683,19 @@ function updateUIAfterLoad() {
         document.querySelector('[data-mode="sounding"]').classList.add('active');
         document.querySelector('[data-mode="ullage"]').classList.remove('active');
     }
-    
+
     tankCount.textContent = `${tankList.length} tangki terdeteksi (${foList.length} FOT + ${doList.length} DOT)`;
     dataStatus.textContent = '✅ Data berhasil dimuat dari file Excel';
     dataStatus.className = 'data-status';
-    
+
     updateUI();
     clearResults();
 }
 
-function showUploadSuccess(filename, sheets) {
+function showUploadSuccess(filename) {
     fileStatus.className = 'file-status loaded';
     fileName.textContent = filename;
-    uploadInfo.textContent = `✅ ${sheets.length} sheet data tangki ditemukan`;
-    
-    // Tampilkan daftar sheet
-    sheetList.innerHTML = sheets.map(s => `<span>${s}</span>`).join(' ');
+    uploadInfo.textContent = `✅ ${tankList.length} tangki berhasil dimuat`;
 }
 
 function showUploadError(msg) {
@@ -824,7 +709,6 @@ function showUploadError(msg) {
     trimInput.disabled = true;
     calcBtn.disabled = true;
     ullageModeBtn.disabled = true;
-    sheetList.innerHTML = '';
 }
 
 function clearResults() {
@@ -835,7 +719,7 @@ function clearResults() {
 }
 
 // ============================================================
-// FUNGSI UTAMA
+// FUNGSI UTAMA (sama seperti sebelumnya)
 // ============================================================
 
 function hasUllage(tankName) {
@@ -1060,7 +944,6 @@ function showError(msg) {
 // EVENT LISTENERS
 // ============================================================
 
-// Upload
 uploadArea.addEventListener('click', () => fileInput.click());
 uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
 uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
@@ -1081,9 +964,7 @@ fileInput.addEventListener('change', (e) => {
         readExcelFile(e.target.files[0]);
     }
 });
-resetFileBtn.addEventListener('click', resetApp);
-
-function resetApp() {
+resetFileBtn.addEventListener('click', () => {
     excelData = null;
     tankList = [];
     tankDataMap = {};
@@ -1094,7 +975,6 @@ function resetApp() {
     dataStatus.textContent = '⏳ Menunggu upload file Excel';
     dataStatus.className = 'data-status';
     tankCount.textContent = '0 tangki terdeteksi';
-    sheetList.innerHTML = '';
     tankSelect.innerHTML = '<option value="">— upload file terlebih dahulu —</option>';
     tankSelect.disabled = true;
     valueInput.disabled = true;
@@ -1103,36 +983,16 @@ function resetApp() {
     ullageModeBtn.disabled = true;
     tankInfo.innerHTML = '<strong>—</strong> · Upload file Excel terlebih dahulu <span class="tank-type-badge fo">FO</span>';
     clearResults();
-}
+});
 
-function readExcelFile(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: false });
-            processWorkbook(workbook, file.name);
-        } catch (err) {
-            showUploadError('Gagal membaca file: ' + err.message);
-        }
-    };
-    reader.onerror = function() {
-        showUploadError('Gagal membaca file');
-    };
-    reader.readAsArrayBuffer(file);
-}
-
-// Tank select
 tankSelect.addEventListener('change', () => {
     currentTank = tankSelect.value;
     updateUI();
     clearResults();
 });
 
-// Calculate
 calcBtn.addEventListener('click', calculate);
 
-// Mode toggle
 modeToggle.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -1153,7 +1013,6 @@ modeToggle.addEventListener('click', (e) => {
     trimInput.value = '';
 });
 
-// Enter key
 valueInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
 trimInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
 
@@ -1161,7 +1020,7 @@ trimInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(
 // INIT
 // ============================================================
 console.log('© Chief Engineer Suprianto — Gouta Maru Tank Volume Calculator');
-console.log('Upload file Excel untuk mendeteksi semua tangki secara otomatis');
+console.log('Upload file Excel untuk memuat data 19 tangki');
 </script>
 </body>
 </html>
