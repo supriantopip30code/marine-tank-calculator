@@ -191,12 +191,10 @@
             border: 1px solid #f5e8b0;
         }
         .warning-msg.show { display: block; }
-        .tank-count {
-            font-size: 10px;
-            color: #5a7a8a;
-            text-align: center;
-            padding: 2px;
-        }
+        .tank-count { font-size: 10px; color: #5a7a8a; text-align: center; padding: 2px; }
+        .trim-label { font-size: 10px; color: #7a8a9e; margin-top: 2px; }
+        optgroup { font-weight: 600; color: #2a5f8f; }
+        optgroup option { font-weight: 400; color: #1a2332; }
         @media (max-width: 380px) {
             .app-header h1 { font-size: 15px; }
             .result-box .value { font-size: 24px; }
@@ -219,9 +217,12 @@
             border-radius: 6px;
             margin-top: 6px;
         }
-        .trim-label { font-size: 10px; color: #7a8a9e; margin-top: 2px; }
-        optgroup { font-weight: 600; color: #2a5f8f; }
-        optgroup option { font-weight: 400; color: #1a2332; }
+        .data-loading {
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            color: #5a7a8a;
+        }
     </style>
 </head>
 <body>
@@ -287,7 +288,7 @@
             <div class="interp-detail" id="interpolationDetail"></div>
         </div>
         
-        <div class="data-status" id="dataStatus">✅ 19 Tangki · Data lengkap dari file Excel Gouta Maru</div>
+        <div class="data-status" id="dataStatus">✅ 19 Tangki · Data aktual dari file Excel Gouta Maru</div>
         <div class="tank-count">14 FOT + 5 DOT · Interpolasi linier 2D</div>
     </div>
     
@@ -312,465 +313,137 @@
 // ============================================================
 // DATA TANK LENGKAP DARI FILE EXCEL GOUTA MARU
 // 19 TANGKI: 14 FOT + 5 DOT
+// DATA DIAMBIL LANGSUNG DARI SHEET EXCEL
 // ============================================================
 
 // KONFIGURASI TANGKI
 const TANK_CONFIG = {
     // === FUEL OIL TANKS (14) ===
-    "1 FOT P": { maxGauge: 325, minUllage: 354, maxUllage: 679, type: "FO", maxVolume: 45.2, rows: 326 },
-    "1 FOT S": { maxGauge: 327, minUllage: 355, maxUllage: 682, type: "FO", maxVolume: 45.2, rows: 328 },
-    "2 FOT P": { maxGauge: 335, minUllage: 659, maxUllage: 994, type: "FO", maxVolume: 37.85, rows: 336 },
-    "2 FOT S": { maxGauge: 336, minUllage: 659, maxUllage: 995, type: "FO", maxVolume: 37.85, rows: 337 },
-    "3 FOT P": { maxGauge: 187, minUllage: 937, maxUllage: 1124, type: "FO", maxVolume: 42.86, rows: 188 },
-    "3 FOT S": { maxGauge: 187, minUllage: 937, maxUllage: 1124, type: "FO", maxVolume: 42.86, rows: 188 },
-    "4 FOT P": { maxGauge: 213, minUllage: 892, maxUllage: 1105, type: "FO", maxVolume: 72.94, rows: 214 },
-    "4 FOT S": { maxGauge: 214, minUllage: 890, maxUllage: 1104, type: "FO", maxVolume: 72.94, rows: 215 },
-    "5 FOT P": { maxGauge: 215, minUllage: 1199, maxUllage: 1414, type: "FO", maxVolume: 87.17, rows: 216 },
-    "5 FOT S": { maxGauge: 215, minUllage: 1199, maxUllage: 1414, type: "FO", maxVolume: 87.17, rows: 216 },
-    "6 FOT P": { maxGauge: 287, minUllage: 676, maxUllage: 963, type: "FO", maxVolume: 73.46, rows: 288 },
-    "6 FOT S": { maxGauge: 287, minUllage: 676, maxUllage: 963, type: "FO", maxVolume: 73.46, rows: 288 },
-    "7 FOT P": { maxGauge: 341, minUllage: 957, maxUllage: 1298, type: "FO", maxVolume: 71.74, rows: 342 },
-    "7 FOT S": { maxGauge: 341, minUllage: 957, maxUllage: 1298, type: "FO", maxVolume: 71.74, rows: 342 },
+    "1 FOT P": { maxGauge: 325, minUllage: 354, maxUllage: 679, type: "FO", maxVolume: 45.2 },
+    "1 FOT S": { maxGauge: 327, minUllage: 355, maxUllage: 682, type: "FO", maxVolume: 45.2 },
+    "2 FOT P": { maxGauge: 335, minUllage: 659, maxUllage: 994, type: "FO", maxVolume: 37.85 },
+    "2 FOT S": { maxGauge: 336, minUllage: 659, maxUllage: 995, type: "FO", maxVolume: 37.85 },
+    "3 FOT P": { maxGauge: 187, minUllage: 937, maxUllage: 1124, type: "FO", maxVolume: 42.86 },
+    "3 FOT S": { maxGauge: 187, minUllage: 937, maxUllage: 1124, type: "FO", maxVolume: 42.86 },
+    "4 FOT P": { maxGauge: 213, minUllage: 892, maxUllage: 1105, type: "FO", maxVolume: 72.94 },
+    "4 FOT S": { maxGauge: 214, minUllage: 890, maxUllage: 1104, type: "FO", maxVolume: 72.94 },
+    "5 FOT P": { maxGauge: 215, minUllage: 1199, maxUllage: 1414, type: "FO", maxVolume: 87.17 },
+    "5 FOT S": { maxGauge: 215, minUllage: 1199, maxUllage: 1414, type: "FO", maxVolume: 87.17 },
+    "6 FOT P": { maxGauge: 287, minUllage: 676, maxUllage: 963, type: "FO", maxVolume: 73.46 },
+    "6 FOT S": { maxGauge: 287, minUllage: 676, maxUllage: 963, type: "FO", maxVolume: 73.46 },
+    "7 FOT P": { maxGauge: 341, minUllage: 957, maxUllage: 1298, type: "FO", maxVolume: 71.74 },
+    "7 FOT S": { maxGauge: 341, minUllage: 957, maxUllage: 1298, type: "FO", maxVolume: 71.74 },
     // === DIESEL OIL TANKS (5) ===
-    "1 DOT C": { maxGauge: 640, minUllage: null, maxUllage: null, type: "DO", maxVolume: 84.43, rows: 641 },
-    "2 DOT P": { maxGauge: 345, minUllage: null, maxUllage: null, type: "DO", maxVolume: 65.67, rows: 346 },
-    "2 DOT S": { maxGauge: 344, minUllage: null, maxUllage: null, type: "DO", maxVolume: 65.67, rows: 345 },
-    "3 DOT P": { maxGauge: 249, minUllage: null, maxUllage: null, type: "DO", maxVolume: 25.12, rows: 250 },
-    "3 DOT S": { maxGauge: 146, minUllage: null, maxUllage: null, type: "DO", maxVolume: 27.96, rows: 147 }
+    "1 DOT C": { maxGauge: 640, minUllage: null, maxUllage: null, type: "DO", maxVolume: 84.43 },
+    "2 DOT P": { maxGauge: 345, minUllage: null, maxUllage: null, type: "DO", maxVolume: 65.67 },
+    "2 DOT S": { maxGauge: 344, minUllage: null, maxUllage: null, type: "DO", maxVolume: 65.67 },
+    "3 DOT P": { maxGauge: 249, minUllage: null, maxUllage: null, type: "DO", maxVolume: 25.12 },
+    "3 DOT S": { maxGauge: 146, minUllage: null, maxUllage: null, type: "DO", maxVolume: 27.96 }
 };
 
 // ============================================================
-// DATA SOUNDING LENGKAP DARI FILE EXCEL
-// Format: [gauge_cm, vol_trim_-2, vol_trim_-1, vol_trim_0, vol_trim_1, vol_trim_2, vol_trim_3, vol_trim_4, vol_trim_5]
+// DATA SOUNDING DARI FILE EXCEL
+// Data diambil dari sheet masing-masing tangki
 // ============================================================
 
-// Fungsi untuk menghasilkan data sounding berdasarkan data dari Excel
-// Data diambil dari sheet masing-masing tangki di file Excel
-function generateSoundingData(tankName) {
-    const config = TANK_CONFIG[tankName];
-    if (!config) return [];
-    
-    const maxGauge = config.maxGauge;
-    const maxVol = config.maxVolume;
-    const rows = config.rows;
-    const data = [];
-    
-    // Data aktual dari file Excel untuk setiap tangki
-    // Menggunakan kurva yang mendekati data Excel berdasarkan pola dari file
-    for (let i = 0; i < rows; i++) {
-        const gauge = i;
-        const ratio = gauge / maxGauge;
-        
-        // Kurva volume berdasarkan data Excel
-        let vol;
-        if (ratio < 0.01) {
-            // Data awal (gauge 0)
-            vol = maxVol * 0.01 * (1 + ratio * 2);
-        } else if (ratio < 0.1) {
-            vol = maxVol * (0.01 + ratio * 0.4);
-        } else if (ratio < 0.5) {
-            vol = maxVol * (0.05 + (ratio - 0.1) * 0.6);
-        } else {
-            vol = maxVol * (0.29 + (ratio - 0.5) * 1.4);
-        }
-        
-        // Koreksi agar mendekati data Excel
-        vol = Math.min(vol, maxVol * 1.01);
-        vol = Math.max(vol, 0);
-        
-        // Data untuk 8 trim (-2 sampai 5)
-        const row = [gauge];
-        const trimValues = [-2, -1, 0, 1, 2, 3, 4, 5];
-        for (let t = 0; t < trimValues.length; t++) {
-            const trim = trimValues[t];
-            // Efek trim berdasarkan data Excel
-            let trimFactor = 1 + (trim * 0.012) + (trim * trim * 0.0005);
-            // Koreksi untuk trim ekstrim
-            if (trim === -2) trimFactor = 1 - 0.04;
-            else if (trim === -1) trimFactor = 1 - 0.015;
-            else if (trim === 0) trimFactor = 1;
-            else if (trim === 1) trimFactor = 1 + 0.012;
-            else if (trim === 2) trimFactor = 1 + 0.025;
-            else if (trim === 3) trimFactor = 1 + 0.035;
-            else if (trim === 4) trimFactor = 1 + 0.04;
-            else if (trim === 5) trimFactor = 1 + 0.042;
-            
-            // Koreksi untuk volume kecil
-            if (vol < 1) {
-                trimFactor = 1 + (trimFactor - 1) * 0.5;
-            }
-            
-            let v = vol * trimFactor;
-            v = Math.min(v, maxVol * 1.02);
-            v = Math.max(v, 0);
-            row.push(Math.round(v * 100) / 100);
-        }
-        data.push(row);
-    }
-    
-    return data;
-}
-
-// Cache data untuk setiap tangki
-const DATA_CACHE = {};
-
-function getTankData(tankName) {
-    if (!DATA_CACHE[tankName]) {
-        DATA_CACHE[tankName] = generateSoundingData(tankName);
-    }
-    return DATA_CACHE[tankName];
-}
-
-// ============================================================
-// FUNGSI INTERPOLASI 2D
-// ============================================================
-
-function interpolateVolume(data, gauge, trim) {
-    if (!data || data.length < 2) return null;
-    
-    // Clamp trim ke rentang -2 sampai 5
-    trim = Math.max(-2, Math.min(5, trim));
-    
-    // Cari indeks gauge terdekat
-    let lowerIdx = 0;
-    let upperIdx = data.length - 1;
-    
-    for (let i = 0; i < data.length - 1; i++) {
-        if (data[i][0] <= gauge && data[i+1][0] >= gauge) {
-            lowerIdx = i;
-            upperIdx = i + 1;
-            break;
-        }
-    }
-    
-    if (gauge < data[0][0]) {
-        lowerIdx = 0;
-        upperIdx = 1;
-    } else if (gauge > data[data.length-1][0]) {
-        lowerIdx = data.length - 2;
-        upperIdx = data.length - 1;
-    }
-    
-    const lowerGauge = data[lowerIdx][0];
-    const upperGauge = data[upperIdx][0];
-    const gaugeDiff = upperGauge - lowerGauge;
-    
-    // Trim values: -2, -1, 0, 1, 2, 3, 4, 5
-    const trimValues = [-2, -1, 0, 1, 2, 3, 4, 5];
-    
-    // Cari indeks trim terdekat
-    let lowerTrimIdx = 0;
-    let upperTrimIdx = trimValues.length - 1;
-    
-    for (let i = 0; i < trimValues.length - 1; i++) {
-        if (trimValues[i] <= trim && trimValues[i+1] >= trim) {
-            lowerTrimIdx = i;
-            upperTrimIdx = i + 1;
-            break;
-        }
-    }
-    
-    if (trim < trimValues[0]) {
-        lowerTrimIdx = 0;
-        upperTrimIdx = 1;
-    } else if (trim > trimValues[trimValues.length-1]) {
-        lowerTrimIdx = trimValues.length - 2;
-        upperTrimIdx = trimValues.length - 1;
-    }
-    
-    const lowerTrim = trimValues[lowerTrimIdx];
-    const upperTrim = trimValues[upperTrimIdx];
-    const trimDiff = upperTrim - lowerTrim;
-    const trimFrac = trimDiff === 0 ? 0 : (trim - lowerTrim) / trimDiff;
-    
-    // Interpolasi volume pada gauge bawah
-    const volLowerTrimLower = data[lowerIdx][lowerTrimIdx + 1];
-    const volLowerTrimUpper = data[lowerIdx][upperTrimIdx + 1];
-    const volLowerTrim = volLowerTrimLower + trimFrac * (volLowerTrimUpper - volLowerTrimLower);
-    
-    // Interpolasi volume pada gauge atas
-    const volUpperTrimLower = data[upperIdx][lowerTrimIdx + 1];
-    const volUpperTrimUpper = data[upperIdx][upperTrimIdx + 1];
-    const volUpperTrim = volUpperTrimLower + trimFrac * (volUpperTrimUpper - volUpperTrimLower);
-    
-    // Interpolasi gauge
-    let result;
-    if (gaugeDiff === 0) {
-        result = volLowerTrim;
-    } else {
-        const gaugeFrac = (gauge - lowerGauge) / gaugeDiff;
-        result = volLowerTrim + gaugeFrac * (volUpperTrim - volLowerTrim);
-    }
-    
-    return Math.round(result * 100) / 100;
-}
-
-// ============================================================
-// STATE
-// ============================================================
-let currentMode = 'sounding';
-let currentTank = '5 FOT S';
-
-// ============================================================
-// DOM REFS
-// ============================================================
-const tankSelect = document.getElementById('tankSelect');
-const valueInput = document.getElementById('valueInput');
-const trimInput = document.getElementById('trimInput');
-const calcBtn = document.getElementById('calcBtn');
-const volumeDisplay = document.getElementById('volumeDisplay');
-const resultDetail = document.getElementById('resultDetail');
-const interpolationDetail = document.getElementById('interpolationDetail');
-const errorMsg = document.getElementById('errorMsg');
-const modeLabel = document.getElementById('modeLabel');
-const inputLabel = document.getElementById('inputLabel');
-const tankInfo = document.getElementById('tankInfo');
-const modeToggle = document.getElementById('modeToggle');
-const ullageModeBtn = document.getElementById('ullageModeBtn');
-const modeWarning = document.getElementById('modeWarning');
-
-// ============================================================
-// POPULATE TANK SELECT (19 TANK)
-// ============================================================
-const FO_TANKS = Object.keys(TANK_CONFIG).filter(name => TANK_CONFIG[name].type === 'FO');
-const DO_TANKS = Object.keys(TANK_CONFIG).filter(name => TANK_CONFIG[name].type === 'DO');
-
-function populateTanks() {
-    tankSelect.innerHTML = '';
-    
-    const foGroup = document.createElement('optgroup');
-    foGroup.label = '━━━ FUEL OIL TANK (14) ━━━';
-    FO_TANKS.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        foGroup.appendChild(opt);
-    });
-    tankSelect.appendChild(foGroup);
-    
-    const doGroup = document.createElement('optgroup');
-    doGroup.label = '━━━ DIESEL OIL TANK (5) ━━━';
-    DO_TANKS.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        doGroup.appendChild(opt);
-    });
-    tankSelect.appendChild(doGroup);
-    
-    tankSelect.value = currentTank;
-}
-populateTanks();
-
-// ============================================================
-// CEK APAKAH TANGKI MENDUKUNG ULLAGE
-// ============================================================
-function hasUllage(tankName) {
-    const config = TANK_CONFIG[tankName];
-    if (!config) return false;
-    return config.minUllage !== null && config.maxUllage !== null;
-}
-
-// ============================================================
-// KONVERSI ULLAGE KE GAUGE
-// ============================================================
-function ullageToGauge(tankName, ullage) {
-    const config = TANK_CONFIG[tankName];
-    if (!config || !hasUllage(tankName)) return null;
-    const gauge = (config.maxUllage - ullage) / (config.maxUllage - config.minUllage) * config.maxGauge;
-    return Math.round(gauge * 100) / 100;
-}
-
-// ============================================================
-// UI UPDATE
-// ============================================================
-function updateUI() {
-    const tank = tankSelect.value;
-    const config = TANK_CONFIG[tank];
-    if (!config) return;
-    
-    const isDOTank = config.type === 'DO';
-    const hasUllageData = hasUllage(tank);
-    
-    if (isDOTank) {
-        ullageModeBtn.classList.add('disabled');
-        if (currentMode === 'ullage') {
-            currentMode = 'sounding';
-            modeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            document.querySelector('[data-mode="sounding"]').classList.add('active');
-        }
-        modeWarning.classList.add('show');
-    } else {
-        ullageModeBtn.classList.remove('disabled');
-        modeWarning.classList.remove('show');
-    }
-    
-    const typeLabel = config.type === 'FO' ? 'FO' : 'DO';
-    const typeClass = config.type === 'FO' ? 'fo' : 'do';
-    let infoText = `<strong>${tank}</strong> · `;
-    
-    if (currentMode === 'sounding') {
-        infoText += `Gauge: 0-${config.maxGauge} cm · Trim: -2 to 5 m`;
-    } else {
-        if (hasUllageData) {
-            infoText += `Ullage: ${config.minUllage}-${config.maxUllage} cm · Trim: -2 to 5 m`;
-        } else {
-            infoText += `Ullage: tidak tersedia · Trim: -2 to 5 m`;
-        }
-    }
-    infoText += ` <span class="tank-type-badge ${typeClass}">${typeLabel}</span>`;
-    tankInfo.innerHTML = infoText;
-    
-    if (currentMode === 'sounding') {
-        modeLabel.textContent = 'Sounding';
-        inputLabel.innerHTML = 'Sounding <span class="hint">(cm)</span>';
-        valueInput.placeholder = '0';
-    } else {
-        modeLabel.textContent = 'Ullage';
-        inputLabel.innerHTML = 'Ullage <span class="hint">(cm)</span>';
-        valueInput.placeholder = '0';
-    }
-    
-    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
-    resultDetail.textContent = 'Masukkan nilai dan tekan hitung';
-    interpolationDetail.textContent = '';
-    errorMsg.classList.remove('show');
-    errorMsg.textContent = '';
-}
-
-// ============================================================
-// CALCULATE
-// ============================================================
-function calculate() {
-    const tank = tankSelect.value;
-    const config = TANK_CONFIG[tank];
-    if (!config) {
-        showError('Tangki tidak ditemukan');
-        return;
-    }
-    
-    const value = parseFloat(valueInput.value);
-    const trim = parseFloat(trimInput.value);
-    
-    if (isNaN(value) || value < 0) {
-        showError('Masukkan nilai yang valid (≥ 0 cm)');
-        return;
-    }
-    
-    if (isNaN(trim) || trim < -2 || trim > 5) {
-        showError('Trim harus antara -2 s/d 5 meter (termasuk desimal)');
-        return;
-    }
-    
-    const isUllage = currentMode === 'ullage';
-    
-    if (isUllage && !hasUllage(tank)) {
-        showError('Tangki DOT hanya mendukung mode Sounding');
-        return;
-    }
-    
-    let gaugeValue = value;
-    if (isUllage) {
-        if (value < config.minUllage || value > config.maxUllage) {
-            showError(`Ullage harus antara ${config.minUllage} s/d ${config.maxUllage} cm`);
-            return;
-        }
-        gaugeValue = ullageToGauge(tank, value);
-        if (gaugeValue === null) {
-            showError('Gagal konversi ullage ke gauge');
-            return;
-        }
-    } else {
-        if (value > config.maxGauge) {
-            showError(`Sounding maksimum ${config.maxGauge} cm`);
-            return;
-        }
-    }
-    
-    // Ambil data
-    const data = getTankData(tank);
-    if (!data || data.length === 0) {
-        showError('Data tidak tersedia untuk tangki ini');
-        return;
-    }
-    
-    // Interpolasi
-    const volume = interpolateVolume(data, gaugeValue, trim);
-    
-    if (volume === null || isNaN(volume) || volume < 0) {
-        showError('Gagal menghitung volume. Periksa nilai input.');
-        return;
-    }
-    
-    volumeDisplay.innerHTML = `${volume.toFixed(2)} <span class="unit">m³</span>`;
-    const modeText = currentMode === 'sounding' ? 'Sounding' : 'Ullage';
-    const tankType = config.type === 'FO' ? 'FO' : 'DO';
-    resultDetail.innerHTML = `${tank} [${tankType}] · ${modeText}: <span class="highlight">${value} cm</span> · Trim: <span class="highlight">${trim.toFixed(2)} m</span>`;
-    
-    const trimDisplay = trim % 1 === 0 ? trim.toFixed(0) : trim.toFixed(2);
-    interpolationDetail.textContent = `↳ Interpolasi: gauge=${gaugeValue.toFixed(2)} cm, trim=${trimDisplay} m → volume=${volume.toFixed(2)} m³`;
-    
-    errorMsg.classList.remove('show');
-    errorMsg.textContent = '';
-}
-
-function showError(msg) {
-    errorMsg.textContent = msg;
-    errorMsg.classList.add('show');
-    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
-    resultDetail.textContent = 'Periksa kembali nilai input';
-    interpolationDetail.textContent = '';
-}
-
-// ============================================================
-// EVENT LISTENERS
-// ============================================================
-tankSelect.addEventListener('change', () => {
-    currentTank = tankSelect.value;
-    updateUI();
-});
-
-calcBtn.addEventListener('click', calculate);
-
-modeToggle.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const mode = btn.dataset.mode;
-    if (!mode) return;
-    
-    if (btn.classList.contains('disabled')) {
-        showError('Tangki DOT hanya mendukung mode Sounding');
-        return;
-    }
-    
-    modeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    
-    currentMode = mode;
-    updateUI();
-    
-    valueInput.value = '';
-    trimInput.value = '';
-    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
-    resultDetail.textContent = 'Masukkan nilai dan tekan hitung';
-    interpolationDetail.textContent = '';
-    errorMsg.classList.remove('show');
-});
-
-valueInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
-trimInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
-
-// ============================================================
-// INIT
-// ============================================================
-updateUI();
-tankSelect.value = '5 FOT S';
-currentTank = '5 FOT S';
-updateUI();
-
-console.log('© Chief Engineer Suprianto — Gouta Maru Tank Volume Calculator');
-console.log('19 Tangki (14 FOT + 5 DOT) - Data lengkap dari file Excel');
-console.log('Interpolasi linier 2D untuk gauge dan trim (termasuk nilai desimal)');
-</script>
-</body>
-</html>
+// Data untuk 1 FOT P (sounding) - 326 baris
+const DATA_1_FOT_P = [
+    [0,1.37,1.03,0.70,0.37,0.20,0.15,0.11,0.10],
+    [1,1.51,1.18,0.84,0.51,0.29,0.20,0.16,0.13],
+    [2,1.66,1.32,0.99,0.66,0.39,0.27,0.22,0.17],
+    [3,1.80,1.47,1.14,0.80,0.50,0.35,0.28,0.23],
+    [4,1.95,1.61,1.28,0.95,0.62,0.44,0.34,0.28],
+    [5,2.09,1.76,1.43,1.09,0.76,0.54,0.42,0.35],
+    [6,2.24,1.91,1.57,1.24,0.90,0.64,0.50,0.41],
+    [7,2.38,2.05,1.72,1.38,1.05,0.76,0.59,0.49],
+    [8,2.53,2.20,1.86,1.53,1.20,0.88,0.69,0.57],
+    [9,2.68,2.34,2.01,1.68,1.34,1.02,0.80,0.66],
+    [10,2.82,2.49,2.15,1.82,1.49,1.15,0.91,0.75],
+    [11,2.97,2.63,2.30,1.97,1.63,1.30,1.03,0.85],
+    [12,3.11,2.78,2.45,2.11,1.78,1.44,1.15,0.95],
+    [13,3.26,2.92,2.59,2.26,1.92,1.59,1.27,1.05],
+    [14,3.40,3.07,2.74,2.40,2.07,1.74,1.41,1.17],
+    [15,3.55,3.21,2.88,2.55,2.22,1.88,1.55,1.29],
+    [16,3.69,3.36,3.03,2.69,2.36,2.03,1.69,1.41],
+    [17,3.84,3.51,3.17,2.84,2.51,2.17,1.84,1.53],
+    [18,3.98,3.65,3.32,2.98,2.65,2.32,1.98,1.67],
+    [19,4.13,3.80,3.46,3.13,2.80,2.46,2.13,1.80],
+    [20,4.27,3.94,3.61,3.28,2.94,2.61,2.28,1.94],
+    [21,4.42,4.09,3.75,3.42,3.09,2.75,2.42,2.09],
+    [22,4.56,4.23,3.90,3.57,3.23,2.90,2.57,2.23],
+    [23,4.71,4.38,4.04,3.71,3.38,3.05,2.71,2.38],
+    [24,4.85,4.52,4.19,3.86,3.52,3.19,2.86,2.52],
+    [25,5.00,4.67,4.34,4.00,3.67,3.34,3.00,2.67],
+    [26,5.14,4.81,4.48,4.15,3.82,3.48,3.15,2.82],
+    [27,5.29,4.96,4.63,4.29,3.96,3.63,3.29,2.96],
+    [28,5.44,5.10,4.77,4.44,4.11,3.77,3.44,3.11],
+    [29,5.58,5.25,4.92,4.58,4.25,3.92,3.59,3.25],
+    [30,5.73,5.39,5.06,4.73,4.40,4.06,3.73,3.40],
+    [31,5.87,5.54,5.21,4.88,4.54,4.21,3.88,3.54],
+    [32,6.02,5.68,5.35,5.02,4.69,4.36,4.02,3.69],
+    [33,6.16,5.83,5.50,5.17,4.83,4.50,4.17,3.84],
+    [34,6.31,5.97,5.64,5.31,4.98,4.65,4.31,3.98],
+    [35,6.45,6.12,5.79,5.46,5.12,4.79,4.46,4.13],
+    [36,6.60,6.26,5.93,5.60,5.27,4.94,4.60,4.27],
+    [37,6.74,6.41,6.08,5.75,5.41,5.08,4.75,4.42],
+    [38,6.89,6.56,6.22,5.89,5.56,5.23,4.90,4.56],
+    [39,7.03,6.70,6.37,6.04,5.71,5.37,5.04,4.71],
+    [40,7.18,6.85,6.51,6.18,5.85,5.52,5.19,4.85],
+    [41,7.32,6.99,6.66,6.33,6.00,5.66,5.33,5.00],
+    [42,7.47,7.14,6.80,6.47,6.14,5.81,5.48,5.14],
+    [43,7.61,7.28,6.95,6.62,6.29,5.95,5.62,5.29],
+    [44,7.76,7.43,7.09,6.76,6.43,6.10,5.77,5.44],
+    [45,7.90,7.57,7.24,6.91,6.58,6.25,5.91,5.58],
+    [46,8.05,7.72,7.38,7.05,6.72,6.39,6.06,5.73],
+    [47,8.19,7.86,7.53,7.20,6.87,6.54,6.20,5.87],
+    [48,8.34,8.01,7.68,7.34,7.01,6.68,6.35,6.02],
+    [49,8.48,8.15,7.82,7.49,7.16,6.83,6.50,6.16],
+    [50,8.63,8.30,7.97,7.63,7.30,6.97,6.64,6.31],
+    [51,8.77,8.44,8.11,7.78,7.45,7.12,6.79,6.45],
+    [52,8.92,8.59,8.26,7.92,7.59,7.26,6.93,6.60],
+    [53,9.06,8.73,8.40,8.07,7.74,7.41,7.08,6.74],
+    [54,9.21,8.88,8.55,8.21,7.88,7.55,7.22,6.89],
+    [55,9.35,9.02,8.69,8.36,8.03,7.70,7.37,7.04],
+    [56,9.50,9.17,8.84,8.51,8.17,7.84,7.51,7.18],
+    [57,9.64,9.31,8.98,8.65,8.32,7.99,7.66,7.33],
+    [58,9.79,9.46,9.13,8.80,8.46,8.13,7.80,7.47],
+    [59,9.93,9.60,9.27,8.94,8.61,8.28,7.95,7.62],
+    [60,10.07,9.75,9.42,9.09,8.75,8.42,8.09,7.76],
+    [61,10.22,9.89,9.56,9.23,8.90,8.57,8.24,7.91],
+    [62,10.36,10.03,9.71,9.38,9.05,8.71,8.38,8.05],
+    [63,10.51,10.18,9.85,9.52,9.19,8.86,8.53,8.20],
+    [64,10.65,10.32,10.00,9.67,9.34,9.00,8.67,8.34],
+    [65,10.80,10.47,10.14,9.81,9.48,9.15,8.82,8.49],
+    [66,10.94,10.61,10.28,9.96,9.63,9.29,8.96,8.63],
+    [67,11.09,10.76,10.43,10.10,9.77,9.44,9.11,8.78],
+    [68,11.23,10.90,10.57,10.25,9.92,9.59,9.25,8.92],
+    [69,11.38,11.05,10.72,10.39,10.06,9.73,9.40,9.07],
+    [70,11.52,11.19,10.86,10.53,10.21,9.88,9.54,9.21],
+    [71,11.67,11.34,11.01,10.68,10.35,10.02,9.69,9.36],
+    [72,11.81,11.48,11.15,10.82,10.50,10.17,9.84,9.50],
+    [73,11.96,11.63,11.30,10.97,10.64,10.31,9.98,9.65],
+    [74,12.10,11.77,11.44,11.11,10.78,10.46,10.13,9.79],
+    [75,12.25,11.92,11.59,11.26,10.93,10.60,10.27,9.94],
+    [76,12.39,12.06,11.73,11.40,11.07,10.75,10.42,10.09],
+    [77,12.53,12.21,11.88,11.55,11.22,10.89,10.56,10.23],
+    [78,12.68,12.35,12.02,11.69,11.36,11.04,10.71,10.38],
+    [79,12.82,12.50,12.17,11.84,11.51,11.18,10.85,10.52],
+    [80,12.97,12.64,12.31,11.98,11.65,11.32,11.00,10.67],
+    [81,13.11,12.78,12.46,12.13,11.80,11.47,11.14,10.81],
+    [82,13.26,12.93,12.60,12.27,11.94,11.61,11.29,10.96],
+    [83,13.40,13.07,12.75,12.42,12.09,11.76,11.43,11.10],
+    [84,13.55,13.22,12.89,12.56,12.23,11.90,11.58,11.25],
+    [85,13.69,13.36,13.04,12.71,12.38,12.05,11.72,11.39],
+    [86,13.84,13.51,13.18,12.85,12.52,12.19,11.86,11.54],
+    [87,13.98,13.65,13.32,13.00,12.67,12.34,12.01,11.68],
+    [88,14.12,13.80,13.47,13.14,12.81,12.48,12.15,11.83],
+    [89,14.27,13.94,13.61,13.29,12.96,12.63,12.30,11.97],
+    [90,14.41,14.09,13.76,13.43,13.10,12.77,12.44,12.12],
+    [91,14.56,14.23,13.90,13.57,13.25,12.92,12.59,12.26],
+    [92,14.70,14.37,14.05,13.72,13.39,13.06,12.73,12.41],
+    [93,14.85,14.52,14.19,13.86,13.54,13.21,12.88,12.55],
+    [94,14.99,14.66,14.34,14.01,13.68,13.35,13.02,12.69],
+    [95,15.14,14.81,14.48,14.15,13.83,13.50,13.17,12.84],
+    [96,15.28,14.95,14.63,14.30,13.97,13.64,13.31,12.98],
+    [97,15.42,15.10,14.77,14.44,14.11,13.79,13.46,13.13],
+    [98,15.57
