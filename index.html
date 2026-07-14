@@ -731,4 +731,336 @@ function interpolateVolume(data, gauge, trim) {
     
     // Cari indeks gauge terdekat
     let lowerIdx = 0;
-    let upperIdx = data.length - 
+    let upperIdx = data.length - 1;
+    
+    for (let i = 0; i < data.length - 1; i++) {
+        if (data[i][0] <= gauge && data[i+1][0] >= gauge) {
+            lowerIdx = i;
+            upperIdx = i + 1;
+            break;
+        }
+        if (gauge < data[0][0]) {
+            lowerIdx = 0;
+            upperIdx = 1;
+            break;
+        }
+        if (gauge > data[data.length-1][0]) {
+            lowerIdx = data.length - 2;
+            upperIdx = data.length - 1;
+            break;
+        }
+    }
+    
+    const lowerGauge = data[lowerIdx][0];
+    const upperGauge = data[upperIdx][0];
+    const gaugeDiff = upperGauge - lowerGauge;
+    
+    // Trim index: -2 -> 1, -1 -> 2, 0 -> 3, 1 -> 4, 2 -> 5, 3 -> 6, 4 -> 7, 5 -> 8
+    const trimIdx = Math.min(7, Math.max(0, trim + 2));
+    const lowerTrimIdx = Math.floor(trimIdx);
+    const upperTrimIdx = Math.min(7, lowerTrimIdx + 1);
+    const trimFrac = trimIdx - lowerTrimIdx;
+    
+    const lowerVol = data[lowerIdx][lowerTrimIdx + 1];
+    const upperVol = data[lowerIdx][upperTrimIdx + 1];
+    const lowerTrimVol = lowerVol + trimFrac * (upperVol - lowerVol);
+    
+    if (gaugeDiff === 0) return lowerTrimVol;
+    
+    const lowerVol2 = data[upperIdx][lowerTrimIdx + 1];
+    const upperVol2 = data[upperIdx][upperTrimIdx + 1];
+    const upperTrimVol = lowerVol2 + trimFrac * (upperVol2 - lowerVol2);
+    
+    const gaugeFrac = (gauge - lowerGauge) / gaugeDiff;
+    const result = lowerTrimVol + gaugeFrac * (upperTrimVol - lowerTrimVol);
+    
+    return Math.round(result * 100) / 100;
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let currentMode = 'sounding';
+let currentTank = '5 FOT S';
+
+// ============================================================
+// DOM REFS
+// ============================================================
+const tankSelect = document.getElementById('tankSelect');
+const valueInput = document.getElementById('valueInput');
+const trimInput = document.getElementById('trimInput');
+const calcBtn = document.getElementById('calcBtn');
+const volumeDisplay = document.getElementById('volumeDisplay');
+const resultDetail = document.getElementById('resultDetail');
+const errorMsg = document.getElementById('errorMsg');
+const modeLabel = document.getElementById('modeLabel');
+const inputLabel = document.getElementById('inputLabel');
+const tankInfo = document.getElementById('tankInfo');
+const modeToggle = document.getElementById('modeToggle');
+const ullageModeBtn = document.getElementById('ullageModeBtn');
+const modeWarning = document.getElementById('modeWarning');
+
+// ============================================================
+// POPULATE TANK SELECT
+// ============================================================
+const FO_TANKS = Object.keys(TANK_CONFIG).filter(name => TANK_CONFIG[name].type === 'FO');
+const DO_TANKS = Object.keys(TANK_CONFIG).filter(name => TANK_CONFIG[name].type === 'DO');
+
+function populateTanks() {
+    tankSelect.innerHTML = '';
+    
+    const foGroup = document.createElement('optgroup');
+    foGroup.label = '━━━ FUEL OIL TANK ━━━';
+    FO_TANKS.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        foGroup.appendChild(opt);
+    });
+    tankSelect.appendChild(foGroup);
+    
+    const doGroup = document.createElement('optgroup');
+    doGroup.label = '━━━ DIESEL OIL TANK ━━━';
+    DO_TANKS.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        doGroup.appendChild(opt);
+    });
+    tankSelect.appendChild(doGroup);
+    
+    tankSelect.value = currentTank;
+}
+populateTanks();
+
+// ============================================================
+// CEK APAKAH TANGKI MENDUKUNG ULLAGE
+// ============================================================
+function hasUllage(tankName) {
+    const config = TANK_CONFIG[tankName];
+    if (!config) return false;
+    return config.minUllage !== null && config.maxUllage !== null;
+}
+
+// ============================================================
+// GET DATA TANK
+// ============================================================
+function getTankData(tankName) {
+    const soundingData = getSoundingDataFromExcel(tankName);
+    let ullageData = null;
+    
+    if (hasUllage(tankName)) {
+        // Untuk ullage, kita balik data sounding
+        // Ullage = maxUllage - (gauge / maxGauge * range)
+        const config = TANK_CONFIG[tankName];
+        if (config && soundingData.length > 0) {
+            ullageData = soundingData.map(row => {
+                const gauge = row[0];
+                const ullage = config.maxUllage - (gauge / config.maxGauge * (config.maxUllage - config.minUllage));
+                const newRow = [Math.round(ullage * 100) / 100];
+                for (let i = 1; i < row.length; i++) {
+                    newRow.push(row[i]);
+                }
+                return newRow;
+            });
+        }
+    }
+    
+    return { sounding: soundingData, ullage: ullageData };
+}
+
+// ============================================================
+// UI UPDATE
+// ============================================================
+function updateUI() {
+    const tank = tankSelect.value;
+    const config = TANK_CONFIG[tank];
+    if (!config) return;
+    
+    const isDOTank = config.type === 'DO';
+    const hasUllageData = hasUllage(tank);
+    
+    // Update mode toggle untuk DOT tank
+    if (isDOTank) {
+        ullageModeBtn.classList.add('disabled');
+        if (currentMode === 'ullage') {
+            currentMode = 'sounding';
+            modeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-mode="sounding"]').classList.add('active');
+        }
+        modeWarning.classList.add('show');
+    } else {
+        ullageModeBtn.classList.remove('disabled');
+        modeWarning.classList.remove('show');
+    }
+    
+    // Update tank info
+    const typeLabel = config.type === 'FO' ? 'FO' : 'DO';
+    const typeClass = config.type === 'FO' ? 'fo' : 'do';
+    let infoText = `<strong>${tank}</strong> · `;
+    
+    if (currentMode === 'sounding') {
+        infoText += `Gauge: 0-${config.maxGauge} cm · Trim: -2 to 5 m`;
+    } else {
+        if (hasUllageData) {
+            infoText += `Ullage: ${config.minUllage}-${config.maxUllage} cm · Trim: -2 to 5 m`;
+        } else {
+            infoText += `Ullage: tidak tersedia · Trim: -2 to 5 m`;
+        }
+    }
+    infoText += ` <span class="tank-type-badge ${typeClass}">${typeLabel}</span>`;
+    tankInfo.innerHTML = infoText;
+    
+    // Update label
+    if (currentMode === 'sounding') {
+        modeLabel.textContent = 'Sounding';
+        inputLabel.innerHTML = 'Sounding <span class="hint">(cm)</span>';
+        valueInput.placeholder = '0';
+    } else {
+        modeLabel.textContent = 'Ullage';
+        inputLabel.innerHTML = 'Ullage <span class="hint">(cm)</span>';
+        valueInput.placeholder = '0';
+    }
+    
+    // Clear results
+    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
+    resultDetail.textContent = 'Masukkan nilai dan tekan hitung';
+    errorMsg.classList.remove('show');
+    errorMsg.textContent = '';
+}
+
+// ============================================================
+// CALCULATE
+// ============================================================
+function calculate() {
+    const tank = tankSelect.value;
+    const config = TANK_CONFIG[tank];
+    if (!config) {
+        showError('Tangki tidak ditemukan');
+        return;
+    }
+    
+    const value = parseFloat(valueInput.value);
+    const trim = parseFloat(trimInput.value);
+    
+    if (isNaN(value) || value < 0) {
+        showError('Masukkan nilai yang valid (≥ 0 cm)');
+        return;
+    }
+    
+    if (isNaN(trim) || trim < -2 || trim > 5) {
+        showError('Trim harus antara -2 s/d 5 meter');
+        return;
+    }
+    
+    const isUllage = currentMode === 'ullage';
+    
+    // Cek apakah tangki mendukung ullage
+    if (isUllage && !hasUllage(tank)) {
+        showError('Tangki DOT hanya mendukung mode Sounding');
+        return;
+    }
+    
+    // Validasi range
+    if (isUllage) {
+        if (value < config.minUllage || value > config.maxUllage) {
+            showError(`Ullage harus antara ${config.minUllage} s/d ${config.maxUllage} cm`);
+            return;
+        }
+    } else {
+        if (value > config.maxGauge) {
+            showError(`Sounding maksimum ${config.maxGauge} cm`);
+            return;
+        }
+    }
+    
+    // Get data
+    const data = getTankData(tank);
+    const dataArray = isUllage ? data.ullage : data.sounding;
+    
+    if (!dataArray || dataArray.length === 0) {
+        showError('Data tidak tersedia untuk tangki ini');
+        return;
+    }
+    
+    // Interpolasi
+    let gaugeValue = value;
+    if (isUllage) {
+        // Untuk ullage, kita perlu konversi ke gauge
+        const config = TANK_CONFIG[tank];
+        const gauge = (config.maxUllage - value) / (config.maxUllage - config.minUllage) * config.maxGauge;
+        gaugeValue = Math.round(gauge * 100) / 100;
+    }
+    
+    const volume = interpolateVolume(dataArray, gaugeValue, trim);
+    
+    if (volume === null || isNaN(volume)) {
+        showError('Gagal menghitung volume. Periksa nilai input.');
+        return;
+    }
+    
+    volumeDisplay.innerHTML = `${volume.toFixed(2)} <span class="unit">m³</span>`;
+    const modeText = currentMode === 'sounding' ? 'Sounding' : 'Ullage';
+    const tankType = config.type === 'FO' ? 'FO' : 'DO';
+    resultDetail.textContent = `${tank} [${tankType}] · ${modeText}: ${value} cm · Trim: ${trim} m`;
+    errorMsg.classList.remove('show');
+    errorMsg.textContent = '';
+}
+
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.classList.add('show');
+    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
+    resultDetail.textContent = 'Periksa kembali nilai input';
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+tankSelect.addEventListener('change', () => {
+    currentTank = tankSelect.value;
+    updateUI();
+});
+
+calcBtn.addEventListener('click', calculate);
+
+modeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    if (!mode) return;
+    
+    if (btn.classList.contains('disabled')) {
+        showError('Tangki DOT hanya mendukung mode Sounding');
+        return;
+    }
+    
+    modeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    currentMode = mode;
+    updateUI();
+    
+    valueInput.value = '';
+    trimInput.value = '';
+    volumeDisplay.innerHTML = '— <span class="unit">m³</span>';
+    resultDetail.textContent = 'Masukkan nilai dan tekan hitung';
+    errorMsg.classList.remove('show');
+});
+
+valueInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
+trimInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') calculate(); });
+
+// ============================================================
+// INIT
+// ============================================================
+updateUI();
+tankSelect.value = '5 FOT S';
+currentTank = '5 FOT S';
+updateUI();
+
+console.log('© Chief Engineer Suprianto — Gouta Maru Tank Volume Calculator');
+console.log('Data berdasarkan Sounding & Ullage Table Gouta Maru');
+</script>
+</body>
+</html>
