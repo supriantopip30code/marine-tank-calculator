@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marine Tank Calculator</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#0b3d91;
+    color:white;
+    text-align:center;
+    padding:20px;
+}
+
+.container{
+    background:white;
+    color:black;
+    max-width:400px;
+    margin:auto;
+    padding:20px;
+    border-radius:15px;
+}
+
+input,select,button{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    font-size:16px;
+}
+
+button{
+    background:#0b3d91;
+    color:white;
+    border:none;
+    border-radius:8px;
+}
+
+#hasil{
+    margin-top:20px;
+    font-size:20px;
+    font-weight:bold;
+}
+</style>
+
+</head>
+
+<body>
+
+<h2>Marine Tank Calculator</h2>
+<p>Chief Engineer Suprianto</p>
+
+<div class="container">
+
+<select>
+<option>No.1 F.O.T (P)</option>
+<option>No.1 F.O.T (S)</option>
+<option>No.2 F.O.T (P)</option>
+<option>No.2 F.O.T (S)</option>
+</select>
+
+<input type="number" id="ullage" placeholder="Input Ullage (m)">
+
+<button onclick="hitung()">Calculate</button>
+
+<div id="hasil"></div>
+
+</div>
+
+<script>
+
+function hitung(){
+
+let ullage=document.getElementById("ullage").value;
+
+document.getElementById("hasil").innerHTML=
+"Ullage : "+ullage+" m";
+
+}
+
+</script>
+
+</body>
+</html>
