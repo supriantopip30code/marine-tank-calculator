@@ -1,15 +1,18 @@
-// ====================================
-// Marine Tank Calculator
-// Version 0.1
-// Created by Chief Engineer Suprianto
-// ====================================
+document.addEventListener("DOMContentLoaded", () => {
 
-console.log("Marine Tank Calculator Started");
+    const btn = document.getElementById("calculate");
+    const volume = document.getElementById("volume");
 
-const app = {
-    version: "0.1",
-    vessel: "MV Gouta Maru",
-    author: "Chief Engineer Suprianto"
-};
+    btn.addEventListener("click", () => {
 
-console.log(app);
+        let value = Number(document.getElementById("value").value);
+
+        let trim = Number(document.getElementById("trim").value);
+
+        let result = value * 0.315 + trim;
+
+        volume.innerHTML = result.toFixed(3) + " m³";
+
+    });
+
+});
