@@ -1,2 +1,2 @@
 # marine-tank-calculator
-Marine Tank Calculator by Chief Engineer Suprianto
+GOUTA MARU FO & DO Tank Calculator by Chief Engineer Suprianto
